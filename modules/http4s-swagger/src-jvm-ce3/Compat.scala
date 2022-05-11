@@ -51,11 +51,12 @@ private[smithy4s] object Compat {
     def apply[F[_]](
         hasId: HasId,
         path: String,
-        swaggerUiPath: String = swaggerUiPath
+        swaggerUiPath: String = swaggerUiPath,
+        swaggerUIInitJs: String = swaggerUIInitJs
     )(implicit
         F: Sync[F]
     ): Docs[F] = {
-      new Docs[F](hasId, path, swaggerUiPath) {
+      new Docs[F](hasId, path, swaggerUiPath, swaggerUIInitJs) {
         override def staticResource(name: String, req: Option[Request[F]]) = {
           StaticFile.fromResource(name, req)
         }

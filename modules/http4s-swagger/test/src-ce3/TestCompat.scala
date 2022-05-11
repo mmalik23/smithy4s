@@ -28,5 +28,8 @@ trait TestCompat { self: BaseIOSuite =>
   }
 
   def docs(path: String) =
-    Docs[IO](service, path, swaggerUiPath = "swaggerui")
+    Docs[IO](service, path)
+
+  def docs(path: String, swaggerPath: String, swaggerInitPath: String) =
+    Docs[IO](service, path, swaggerPath, swaggerInitPath)
 }

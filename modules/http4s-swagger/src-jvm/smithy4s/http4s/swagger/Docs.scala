@@ -28,7 +28,8 @@ import org.webjars.WebJarAssetLocator
 private[smithy4s] abstract class Docs[F[_]](
     hasId: HasId,
     path: String,
-    swaggerUiPath: String
+    swaggerUiPath: String,
+    swaggerUIInitJs: String
 )(implicit F: Sync[F])
     extends Http4sDsl[F]
     with Compat.DocsClass[F] {
@@ -47,10 +48,47 @@ private[smithy4s] abstract class Docs[F[_]](
       }
     }
   }
+
+  def fun: F[fs2.Stream[F, Byte]] = F.delay {
+
+    def petStoreConfig(line: String) =
+      line.contains("url: \"https://petstore.swagger.io/v2/swagger.json\"")
+
+    val read = fs2.io
+      .readClassLoaderResource(s"$swaggerUiPath/$swaggerUIInitJs")
+      .through(fs2.text.utf8.decode)
+
+    val transform =
+      read
+        .through(fs2.text.lines)
+        .map(str =>
+          if (
+            str.contains("url: \"https://petstore.swagger.io/v2/swagger.json\"")
+          )
+            str.replace(
+              "https://petstore.swagger.io/v2/swagger.json",
+              "/" + jsonSpec
+            )
+          else str
+        )
+        .through(fs2.text.utf8.encode)
+
+    read
+      .forall(!petStoreConfig(_))
+      .flatMap(notExists =>
+        if (notExists)
+          fs2.Stream.raiseError(
+            new Exception("the swagger ui file format has changed bruv")
+          )
+        else transform
+      )
+
+  }
+
   def routes: HttpRoutes[F] = HttpRoutes.of[F] {
     case r @ GET -> DocPath() if r.uri.query.isEmpty =>
       PermanentRedirect(
-        Location(Uri.unsafeFromString(s"/$path/index.html?url=/$jsonSpec"))
+        Location(Uri.unsafeFromString(s"/$path/index.html"))
       )
 
     case request @ GET -> `actualPath` / filePath =>
@@ -60,6 +98,14 @@ private[smithy4s] abstract class Docs[F[_]](
     case request @ GET -> Root / `jsonSpec` =>
       staticResource(jsonSpec, Some(request))
         .getOrElseF(InternalServerError())
+
+    case _ @GET -> Root / `swaggerUIInitJs` =>
+      F.map(fun)(entityBody =>
+        Response(
+          body = entityBody
+        )
+      )
+
   }
 }
 
@@ -71,4 +117,7 @@ trait SwaggerUiInit {
 
   protected lazy val swaggerUiPath =
     s"META-INF/resources/webjars/swagger-ui/$swaggerUiVersion"
+
+  protected lazy val swaggerUIInitJs = "swagger-initializer.js"
+
 }

@@ -24,8 +24,93 @@ import weaver._
 
 object DocsSpec extends SimpleIOSuite with TestCompat {
 
+  // endpoint tests
+
+  test(
+    "If swagger init file does not contain petstore url then throw an error"
+  ) {
+
+    val initFile = "missing-petstore.js"
+    val app = docs("docs", "swaggerui", initFile).routes.orNotFound
+
+    val request =
+      Request[IO](
+        method = Method.GET,
+        uri = Uri.unsafeFromString("/" + initFile)
+      )
+
+    for {
+      response <- app.run(request)
+      body <- response.body.compile.toList
+        .map(_.toArray)
+        .map(new String(_))
+        .attempt
+    } yield {
+      expect(body.isLeft)
+    }
+  }
+
+  test(
+    "If swagger init file does not exist then then throw an error"
+  ) {
+
+    val initFile = "missing-init.js"
+    val app = docs("docs", "swaggerui", initFile).routes.orNotFound
+
+    val request =
+      Request[IO](
+        method = Method.GET,
+        uri = Uri.unsafeFromString("/" + initFile)
+      )
+
+    for {
+      response <- app.run(request)
+      body <- response.body.compile.toList
+        .map(_.toArray)
+        .map(new String(_))
+        .attempt
+    } yield {
+      expect(body.isLeft)
+    }
+
+  }
+
+  List("docs", "example/docs", "very/long/example/docs").foreach { path =>
+    val app = docs(path, "swaggerui", "").routes.orNotFound
+
+    test(s"GET $path/test-file.json fetches requested file") {
+      val filePath = s"/$path/test-file.json"
+      val request =
+        Request[IO](method = Method.GET, uri = Uri.unsafeFromString(filePath))
+      app.run(request).map { response =>
+        expect(response.status == Status.Ok)
+      }
+    }
+  }
+
+  // jar tests
+
   List("docs", "example/docs", "very/long/example/docs").foreach { path =>
     val app = docs(path).routes.orNotFound
+
+    test(s"GET /swagger-initializer.js replaces url with spec file location") {
+      val request =
+        Request[IO](
+          method = Method.GET,
+          uri = Uri.unsafeFromString("/swagger-initializer.js")
+        )
+
+      for {
+        response <- app.run(request)
+        body <- response.body.compile.toList.map(_.toArray).map(new String(_))
+      } yield {
+        expect(response.status == Status.Ok) and
+          expect(
+            body.contains("url: \"/foobar.test-spec.json\"")
+          )
+      }
+
+    }
 
     test(s"GET /$path redirects to expected location") {
       val request =
@@ -42,7 +127,7 @@ object DocsSpec extends SimpleIOSuite with TestCompat {
         expect(response.status == Status.PermanentRedirect) and
           expect.eql(
             redirectUri,
-            Some(s"/$path/index.html?url=/foobar.test-spec.json")
+            Some(s"/$path/index.html")
           )
       }
     }
@@ -58,7 +143,7 @@ object DocsSpec extends SimpleIOSuite with TestCompat {
         expect(response.status == Status.PermanentRedirect) and
           expect.eql(
             redirectUri,
-            Some(s"/$path/index.html?url=/foobar.test-spec.json")
+            Some(s"/$path/index.html")
           )
       }
     }
@@ -74,7 +159,7 @@ object DocsSpec extends SimpleIOSuite with TestCompat {
         expect(response.status == Status.PermanentRedirect) and
           expect.eql(
             redirectUri,
-            Some(s"/$path/index.html?url=/foobar.test-spec.json")
+            Some(s"/$path/index.html")
           )
       }
     }
@@ -88,14 +173,6 @@ object DocsSpec extends SimpleIOSuite with TestCompat {
             s"/$path/index.html?url=/test-file.json"
           )
         )
-      app.run(request).map { response =>
-        expect(response.status == Status.Ok)
-      }
-    }
-    test(s"GET $path/test-file.json fetches requested file") {
-      val filePath = s"/$path/test-file.json"
-      val request =
-        Request[IO](method = Method.GET, uri = Uri.unsafeFromString(filePath))
       app.run(request).map { response =>
         expect(response.status == Status.Ok)
       }

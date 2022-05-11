@@ -553,7 +553,7 @@ lazy val `http4s-swagger` = projectMatrix
     libraryDependencies ++= {
       Seq(
         Dependencies.Weaver.cats.value % Test,
-        Dependencies.Webjars.swaggerUi,
+        Dependencies.Webjars.swaggerUi % Test,
         Dependencies.Webjars.webjarsLocator
       )
     },
@@ -749,7 +749,7 @@ lazy val Dependencies = new {
   }
 
   object Webjars {
-    val swaggerUi: ModuleID = "org.webjars" % "swagger-ui" % "4.1.2"
+    val swaggerUi: ModuleID = "org.webjars" % "swagger-ui" % "4.10.3"
 
     val webjarsLocator: ModuleID = "org.webjars" % "webjars-locator" % "0.42"
   }
