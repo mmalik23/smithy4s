@@ -24,6 +24,7 @@ import org.http4s._
 import org.http4s.dsl.Http4sDsl
 import org.http4s.headers.Location
 import org.webjars.WebJarAssetLocator
+import org.typelevel.ci.CIString
 
 private[smithy4s] abstract class Docs[F[_]](
     hasId: HasId,
@@ -49,7 +50,7 @@ private[smithy4s] abstract class Docs[F[_]](
     }
   }
 
-  def fun: F[fs2.Stream[F, Byte]] = F.delay {
+  def modifiedSwaggerInitJs: F[fs2.Stream[F, Byte]] = F.delay {
 
     def petStoreConfig(line: String) =
       line.contains("url: \"https://petstore.swagger.io/v2/swagger.json\"")
@@ -58,18 +59,16 @@ private[smithy4s] abstract class Docs[F[_]](
       .readClassLoaderResource(s"$swaggerUiPath/$swaggerUIInitJs")
       .through(fs2.text.utf8.decode)
 
-    val transform =
+    val modify =
       read
         .through(fs2.text.lines)
-        .map(str =>
-          if (
-            str.contains("url: \"https://petstore.swagger.io/v2/swagger.json\"")
-          )
-            str.replace(
+        .map(line =>
+          if (petStoreConfig(line))
+            line.replace(
               "https://petstore.swagger.io/v2/swagger.json",
               "/" + jsonSpec
             )
-          else str
+          else line
         )
         .through(fs2.text.utf8.encode)
 
@@ -77,10 +76,10 @@ private[smithy4s] abstract class Docs[F[_]](
       .forall(!petStoreConfig(_))
       .flatMap(notExists =>
         if (notExists)
-          fs2.Stream.raiseError(
-            new Exception("the swagger ui file format has changed bruv")
+          fs2.Stream.raiseError[F](
+            new Exception(s"Unexcepted file format for file: $swaggerUIInitJs")
           )
-        else transform
+        else modify
       )
 
   }
@@ -100,12 +99,13 @@ private[smithy4s] abstract class Docs[F[_]](
         .getOrElseF(InternalServerError())
 
     case _ @GET -> Root / `swaggerUIInitJs` =>
-      F.map(fun)(entityBody =>
+      F.map(modifiedSwaggerInitJs)(entityBody =>
         Response(
-          body = entityBody
+          body = entityBody,
+          headers =
+            Headers(Header.Raw(CIString("content-type"), "text/javascript"))
         )
       )
-
   }
 }
 

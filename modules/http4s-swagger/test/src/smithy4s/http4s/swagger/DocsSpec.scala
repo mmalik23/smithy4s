@@ -24,13 +24,11 @@ import weaver._
 
 object DocsSpec extends SimpleIOSuite with TestCompat {
 
-  // endpoint tests
-
   test(
-    "If swagger init file does not contain petstore url then throw an error"
+    "GET /incorrect-format-swaggerinit.js returns an error because the init file has an incorrect format"
   ) {
 
-    val initFile = "missing-petstore.js"
+    val initFile = "incorrect-format-swaggerinit.js"
     val app = docs("docs", "swaggerui", initFile).routes.orNotFound
 
     val request =
@@ -46,15 +44,20 @@ object DocsSpec extends SimpleIOSuite with TestCompat {
         .map(new String(_))
         .attempt
     } yield {
-      expect(body.isLeft)
+      expect(response.status == Status.Ok) and
+        expect(body.isLeft) and expect(
+          body.left.exists(
+            _.getMessage() == s"Unexcepted file format for file: $initFile"
+          )
+        )
     }
   }
 
   test(
-    "If swagger init file does not exist then then throw an error"
+    "GET /missing-swaggerinit.js returns an error because the file does not exist and an swagger init file is expected"
   ) {
 
-    val initFile = "missing-init.js"
+    val initFile = "missing-swaggerinit.js"
     val app = docs("docs", "swaggerui", initFile).routes.orNotFound
 
     val request =
@@ -70,11 +73,17 @@ object DocsSpec extends SimpleIOSuite with TestCompat {
         .map(new String(_))
         .attempt
     } yield {
-      expect(body.isLeft)
+      expect(response.status == Status.Ok) and
+        expect(body.isLeft) and expect(
+          body.left.exists(
+            _.getMessage() == "Resource swaggerui/missing-swaggerinit.js not found"
+          )
+        )
     }
 
   }
 
+  // ensure we can fetch static resources
   List("docs", "example/docs", "very/long/example/docs").foreach { path =>
     val app = docs(path, "swaggerui", "").routes.orNotFound
 
@@ -88,8 +97,7 @@ object DocsSpec extends SimpleIOSuite with TestCompat {
     }
   }
 
-  // jar tests
-
+  // These tests use the swagger-ui resource
   List("docs", "example/docs", "very/long/example/docs").foreach { path =>
     val app = docs(path).routes.orNotFound
 
@@ -106,8 +114,13 @@ object DocsSpec extends SimpleIOSuite with TestCompat {
       } yield {
         expect(response.status == Status.Ok) and
           expect(
-            body.contains("url: \"/foobar.test-spec.json\"")
+            response.headers.headers
+              .find(_.name == CIString("content-type"))
+              .exists(_.value == "text/javascript")
           )
+        expect(
+          body.contains("url: \"/foobar.test-spec.json\"")
+        )
       }
 
     }
